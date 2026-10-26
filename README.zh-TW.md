@@ -83,6 +83,8 @@ make local-sync-reset   # 清空 server 資料後重新啟動（`make verify-syn
 3. 依「初始化」一節執行 bootstrap，再 `docker compose up -d --build`。之後可選擇執行 `docker compose run --rm bot python scripts/build_tatoeba.py` 建立例句資料庫。
 4. 查看狀態：`docker compose ps`（含 healthcheck 結果）、`docker compose logs -f bot`。
 
+準備好 `.env` 後，步驟 2–3 也可以改用 `scripts/deploy.sh`：檢查 `.env`、準備 `data/`，`data/collection.anki2` 不存在時執行 bootstrap（先 dry run，確認後才套用），啟動 bot，`data/tatoeba.db` 不存在時建立例句資料庫。`git pull` 後可重複執行來更新。若出現 `Permission denied`，先執行 `chmod +x scripts/deploy.sh`（或改用 `bash scripts/deploy.sh`）。
+
 注意事項：
 
 - **同一份 `data/` 只能有一個 bot 容器**；啟動時會對 `/data/.lock` 取排他鎖，取不到就退出。bootstrap 也要在 bot 停止時執行。

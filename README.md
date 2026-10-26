@@ -83,6 +83,8 @@ When `DEDUP_EXTRA_SOURCES` has no `ReadingField`, matching is by written form on
 3. Run bootstrap as in "Initialization", then `docker compose up -d --build`. Optionally run `docker compose run --rm bot python scripts/build_tatoeba.py` afterwards to build the example database.
 4. Check status: `docker compose ps` (includes the healthcheck result), `docker compose logs -f bot`.
 
+Steps 2–3 can also be done with `scripts/deploy.sh` (after preparing `.env`): it checks `.env`, prepares `data/`, runs bootstrap (dry run, then asks before applying) when `data/collection.anki2` is missing, starts the bot, and builds the example database when `data/tatoeba.db` is missing. It is safe to re-run after `git pull` to update. If it fails with `Permission denied`, run `chmod +x scripts/deploy.sh` first (or `bash scripts/deploy.sh`).
+
 Notes:
 
 - **Only one bot container per `data/`**: at startup the bot takes an exclusive lock on `/data/.lock` and exits if it cannot. Bootstrap must also run while the bot is stopped.

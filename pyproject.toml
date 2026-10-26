@@ -19,6 +19,7 @@ dependencies = [
     "jamdict-data==1.5",
     "edge-tts==7.3.1",
     "pydantic-settings==2.16.1",
+    "httpx==0.28.1",
 ]
 
 [project.optional-dependencies]

@@ -44,12 +44,14 @@ async def make(tmp_path):
     thread = DedicatedThread("lookup-translator-test")
     caches = []
 
-    async def _make(key=FREE_KEY, timeout=1.0, **kwargs):
+    async def _make(key=FREE_KEY, timeout=1.0, target="ZH-HANT", **kwargs):
         server = Server()
         cache = await thread.run(TranslationCache, tmp_path / "translations.db")
         caches.append(cache)
         client = httpx.AsyncClient(transport=httpx.MockTransport(server.handler))
-        translator = DeepLTranslator(SecretStr(key), timeout, cache, thread, client=client, **kwargs)
+        translator = DeepLTranslator(
+            SecretStr(key), timeout, cache, thread, target=target, client=client, **kwargs
+        )
         return translator, server
 
     yield _make
@@ -137,6 +139,7 @@ def factory(deepl=None, gemini=None, cache=None, thread=None):
         gemini_timeout=10,
         cache=cache,
         thread=thread,
+        target="ZH-HANT",
     )
 
 
@@ -194,13 +197,20 @@ async def make_gemini(tmp_path):
     thread = DedicatedThread("lookup-gemini-test")
     caches = []
 
-    async def _make(timeout=1.0, **kwargs):
+    async def _make(timeout=1.0, target="ZH-HANT", **kwargs):
         server = GeminiServer()
         cache = await thread.run(TranslationCache, tmp_path / "translations.db")
         caches.append(cache)
         client = httpx.AsyncClient(transport=httpx.MockTransport(server.handler))
         translator = GeminiTranslator(
-            SecretStr(GEMINI_KEY), "gemini-test", timeout, cache, thread, client=client, **kwargs
+            SecretStr(GEMINI_KEY),
+            "gemini-test",
+            timeout,
+            cache,
+            thread,
+            target=target,
+            client=client,
+            **kwargs,
         )
         return translator, server
 

@@ -1,4 +1,4 @@
-"""Optional translation (DeepL or Gemini, Traditional Chinese by default), cached in /data/translations.db."""
+"""Optional translation (DeepL or Gemini) into TRANSLATION_TARGET, cached in /data/translations.db."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ log = logging.getLogger(__name__)
 
 FREE_ENDPOINT = "https://api-free.deepl.com/v2/translate"
 PRO_ENDPOINT = "https://api.deepl.com/v2/translate"
-DEFAULT_TARGET = "ZH-HANT"
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 _LANGUAGE_NAMES = {"EN": "English", "JA": "Japanese"}
 _TARGET_NAMES = {"ZH-HANT": "Traditional Chinese as used in Taiwan"}
@@ -81,7 +80,7 @@ class CachedTranslator:
         cache: TranslationCache,
         thread: Worker,
         *,
-        target: str = DEFAULT_TARGET,
+        target: str,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.target_lang = target
@@ -221,7 +220,7 @@ def make_translator(
     gemini_timeout: float,
     cache: TranslationCache | None,
     thread: Worker | None,
-    target: str = DEFAULT_TARGET,
+    target: str,
     target_name: str = "",
 ) -> CachedTranslator | None:
     """None (English only, no requests at all) when neither DEEPL_API_KEY nor GEMINI_API_KEY is set."""

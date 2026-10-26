@@ -674,7 +674,9 @@ async def test_deepl_timeout_still_sends_english_preview_in_time(env, tmp_path):
 
     cache = await env.lookup_thread.run(TranslationCache, tmp_path / "translations.db")
     client = httpx.AsyncClient(transport=httpx.MockTransport(hang))
-    translator = DeepLTranslator(SecretStr("k:fx"), 0.1, cache, env.lookup_thread, client=client)
+    translator = DeepLTranslator(
+        SecretStr("k:fx"), 0.1, cache, env.lookup_thread, target="ZH-HANT", client=client
+    )
     await env.restart(translator=translator)
     loop = asyncio.get_running_loop()
     start = loop.time()

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ankibot"
+version = "0.1.0"
+description = "Telegram bot that turns Japanese words and sentences into Anki notes"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # The sync API changes between releases; keep this pinned to the version verified by scripts/spike_sync.py.
+    "anki==26.9.3",
+    "python-telegram-bot==22.8",
+    "fugashi==1.5.2",
+    "unidic-lite==1.0.8",
+    "jamdict==0.1a11.post2",
+    "jamdict-data==1.5",
+    "edge-tts==7.3.1",
+    "pydantic-settings==2.16.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "ruff==0.17.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ankibot = ["locales/*.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: needs the local-sync anki-sync service (run with `make test-integration`)",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]

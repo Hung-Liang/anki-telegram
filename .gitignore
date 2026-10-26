@@ -1,0 +1,11 @@
+.env
+.env.dev
+data/
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+VERIFY.md

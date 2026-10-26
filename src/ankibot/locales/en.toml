@@ -1,0 +1,65 @@
+# Bot UI text. To add a language, copy this file to <code>.toml (e.g. ja.toml) and translate every value.
+# Values are plain text (escaped for Telegram HTML). Keep each {placeholder} as is; write a literal brace as {{ or }}.
+
+[status]
+saving = "⏳ Saving…"
+queued = "⏳ Syncing; will save when done"
+saved = "✅ Saved"
+exists = "⚠️ Already exists, not added"
+failed = "❌ Save failed"
+blocked = "⛔ Full sync required, not saved"
+discarded = "🗑 Discarded"
+undone = "↩️ Undone"
+interrupted = "⚠️ Interrupted, press Save again"
+
+[hint]
+tts_failed = "Audio generation failed"
+translation_failed = "Translation failed"
+
+[preview]
+translating = "Translating…"
+example = "e.g. {example}"
+
+[button]
+save = "💾 Save"
+discard = "🗑 Discard"
+undo = "↩️ Undo"
+
+[answer]
+expired = "Expired or already handled"
+note_gone = "The card no longer exists"
+rejected = "This card is no longer the bot's note type; not deleted"
+undo_blocked = "Full sync required; undo is paused"
+undo_failed = "❌ Undo failed"
+
+[reply]
+processing_failed = "❌ Processing failed"
+no_new_words = "No new words"
+existing = "Already in Anki: {words}"
+not_found = "Not found: {words}"
+word_separator = ", "
+help = """
+Send a Japanese word or sentence and each new word gets its own preview:
+💾 Save writes it to Anki, 🗑 Discard drops it; after saving, ↩️ Undo deletes the card.
+/sync sync now
+/stats cards added today, total cards in the deck and the last sync time
+/help show this message"""
+
+[sync]
+in_progress = "⏳ Syncing…"
+ok = "✅ Sync finished ({time})"
+full_sync_required = "⛔ Full sync required ({reason}); writes are paused. {recovery}"
+skipped = "Sync skipped ({time})"
+failed = "❌ Sync failed ({time}): {error}"
+recovery_hint = "After the desktop app has finished its upload, stop the bot and run `docker compose run --rm bot python -m ankibot.bootstrap --force` (dry-run first, then add `--yes`)."
+
+[stats]
+added_today = "Added today: {count}"
+deck_cards = "Cards in deck: {count}"
+last_sync = "Last sync: {time}"
+never_synced = "never"
+full_sync_required = "⛔ Full sync required"
+
+[notify]
+full_sync_required = "⛔ Full sync required ({reason}); writes are paused and nothing was done automatically. {recovery}"
+sync_failed = "❌ Sync failed (retried {retries} times): {error}"

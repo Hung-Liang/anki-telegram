@@ -1,0 +1,65 @@
+# Bot UI text. To add a language, copy this file to <code>.toml (e.g. ja.toml) and translate every value.
+# Values are plain text (escaped for Telegram HTML). Keep each {placeholder} as is; write a literal brace as {{ or }}.
+
+[status]
+saving = "⏳ 儲存中…"
+queued = "⏳ 同步中，完成後自動儲存"
+saved = "✅ 已儲存"
+exists = "⚠️ 已存在，未新增"
+failed = "❌ 儲存失敗"
+blocked = "⛔ 需要 full sync，未儲存"
+discarded = "🗑 已捨棄"
+undone = "↩️ 已復原"
+interrupted = "⚠️ 中斷，請重新按 Save"
+
+[hint]
+tts_failed = "語音產生失敗"
+translation_failed = "翻譯失敗"
+
+[preview]
+translating = "翻譯中…"
+example = "例：{example}"
+
+[button]
+save = "💾 Save"
+discard = "🗑 Discard"
+undo = "↩️ Undo"
+
+[answer]
+expired = "已過期或已處理"
+note_gone = "卡片已不存在"
+rejected = "這張卡已不是 bot 的 note type，未刪除"
+undo_blocked = "需要 full sync，暫停復原"
+undo_failed = "❌ 復原失敗"
+
+[reply]
+processing_failed = "❌ 處理失敗"
+no_new_words = "沒有新字"
+existing = "已存在：{words}"
+not_found = "查不到：{words}"
+word_separator = "、"
+help = """
+傳一個日文單字或一句日文，每個新字會各出一則預覽：
+💾 Save 寫入 Anki、🗑 Discard 捨棄，存好後可按 ↩️ Undo 刪除該卡。
+/sync 立即同步
+/stats 今日新增數、deck 總卡數與上次同步時間
+/help 顯示這段說明"""
+
+[sync]
+in_progress = "⏳ 同步中…"
+ok = "✅ 同步完成（{time}）"
+full_sync_required = "⛔ 需要 full sync（{reason}），已暫停寫入。{recovery}"
+skipped = "略過同步（{time}）"
+failed = "❌ 同步失敗（{time}）：{error}"
+recovery_hint = "確認桌面版已完成 upload 後，停止 bot 並執行 `docker compose run --rm bot python -m ankibot.bootstrap --force`（先 dry-run 檢視，再加 `--yes`）。"
+
+[stats]
+added_today = "今日新增：{count}"
+deck_cards = "deck 總卡數：{count}"
+last_sync = "上次同步：{time}"
+never_synced = "尚未同步"
+full_sync_required = "⛔ 需要 full sync"
+
+[notify]
+full_sync_required = "⛔ 需要 full sync（{reason}），已暫停寫入，未自動處理。{recovery}"
+sync_failed = "❌ 同步失敗（已重試 {retries} 次）：{error}"

@@ -1,0 +1,64 @@
+<style>
+.zh {
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-size: 21px;
+  font-weight: normal;
+  color: #6fcf97;
+}
+.zh-sub {
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-size: 15px;
+  opacity: 0.6;
+}
+.reading {
+  font-size: 20px;
+  opacity: 0.7;
+}
+</style>
+
+<div lang="ja">
+<div class="reading">{{Reading}}</div>
+{{Word}}
+
+<div style='padding-bottom:20px'>
+  {{#MeaningTL}}
+  <div lang="en" class="zh">{{MeaningTL}}</div>
+  {{/MeaningTL}}
+  {{^MeaningTL}}
+  <div style='font-size: 25px;'>{{Meaning}}</div>
+  {{/MeaningTL}}
+</div>
+
+{{#Sentence}}
+<div style='font-size: 25px;'>{{Sentence}}</div>
+<div style='padding-bottom:10px'>
+  {{#SentenceTL}}
+  <div lang="en" class="zh">{{SentenceTL}}</div>
+  {{/SentenceTL}}
+</div>
+{{/Sentence}}
+
+{{#ExampleJP}}
+<div style='font-size: 20px;'>{{ExampleJP}}</div>
+<div style='padding-bottom:10px'>
+  {{#ExampleTL}}
+  <div lang="en" class="zh-sub">{{ExampleTL}}</div>
+  {{/ExampleTL}}
+</div>
+{{/ExampleJP}}
+
+{{#MeaningTL}}
+<div style='padding-bottom:10px'>
+  <div style='font-size: 15px; opacity: 0.45;'>{{Meaning}}</div>
+</div>
+{{/MeaningTL}}
+
+{{Audio}}
+
+<!-- Source duplicates Sentence for sentence input, so show it only for word input. -->
+{{^Sentence}}
+{{#Source}}
+<div style='font-size: 13px; opacity: 0.35; padding-top: 16px;'>{{Source}}</div>
+{{/Source}}
+{{/Sentence}}
+</div>

@@ -1,0 +1,36 @@
+name: anki-telegram-dev
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: dev
+    command: sleep infinity
+    working_dir: /workspaces/anki-telegram
+    env_file:
+      - path: ../.env.dev
+        required: false
+    volumes:
+      - ..:/workspaces/anki-telegram:cached
+      - data:/data
+
+  anki-sync:
+    profiles: ["local-sync"]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: base
+    command: python -m anki.syncserver
+    environment:
+      SYNC_USER1: ${SYNC_USER1:-user:pass}
+      SYNC_BASE: /sync
+      SYNC_HOST: 0.0.0.0
+      SYNC_PORT: "8080"
+    volumes:
+      - sync-data:/sync
+    user: root
+
+volumes:
+  data:
+  sync-data:

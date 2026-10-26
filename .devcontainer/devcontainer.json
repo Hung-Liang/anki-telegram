@@ -1,0 +1,25 @@
+{
+  "name": "anki-telegram",
+  "dockerComposeFile": "docker-compose.dev.yml",
+  "service": "app",
+  "runServices": ["app"],
+  "workspaceFolder": "/workspaces/anki-telegram",
+  "remoteUser": "app",
+  "postCreateCommand": "pip install -e '.[dev]'",
+  "forwardPorts": [],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "python.testing.pytestEnabled": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        }
+      }
+    }
+  }
+}

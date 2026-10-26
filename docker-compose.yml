@@ -1,0 +1,18 @@
+services:
+  bot:
+    build:
+      context: .
+      target: prod
+    env_file: .env
+    volumes:
+      # Host directory must be owned by the container user (uid 1000): see README.
+      - ./data:/data
+    restart: unless-stopped
+    # Must exceed SHUTDOWN_SYNC_TIMEOUT_SECONDS (45) plus time to stop polling and write state.
+    stop_grace_period: 60s
+    stop_signal: SIGTERM
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

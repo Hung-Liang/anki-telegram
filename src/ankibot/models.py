@@ -51,3 +51,7 @@ class CardData:
     # Raw user input, HTML-escaped.
     source: str
     forms: tuple[str, ...]
+    # Plain text of the sentence to speak: the user's sentence, else the example; empty when neither exists.
+    tts_sentence: str = ""
+    # Local path of the sentence audio file; empty when not generated.
+    sentence_audio: str = ""

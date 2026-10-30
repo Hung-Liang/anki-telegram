@@ -94,6 +94,10 @@ def prepare_persistence(path: Path) -> PicklePersistence:
     return PicklePersistence(path)
 
 
+async def _no_audio() -> tuple[str, bool]:
+    return "", False
+
+
 class BotHandlers:
     def __init__(
         self,
@@ -353,8 +357,13 @@ class BotHandlers:
         waiting = self._t.status_queued if self._sync.is_syncing else self._t.status_saving
         await self._edit(bot, chat_id, mid, with_status(preview.body_html, waiting), None)
 
-        audio, tts_failed = await self._synthesize(preview.card.reading)
-        card = dataclasses.replace(preview.card, audio=audio)
+        sentence = preview.card.tts_sentence if self._settings.tts_sentence else ""
+        (audio, word_failed), (sentence_audio, sentence_failed) = await asyncio.gather(
+            self._synthesize(preview.card.reading),
+            self._synthesize(sentence) if sentence else _no_audio(),
+        )
+        tts_failed = word_failed or sentence_failed
+        card = dataclasses.replace(preview.card, audio=audio, sentence_audio=sentence_audio)
         try:
             result = await self._sync.add_note(card)
         except Exception:

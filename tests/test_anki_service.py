@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -16,6 +17,7 @@ from anki_helpers import (
 
 from ankibot.anki_service import (
     REQUIRED_FIELDS,
+    SENTENCE_AUDIO_FIELD,
     AddStatus,
     AnkiConfigError,
     AnkiService,
@@ -108,6 +110,13 @@ def test_missing_required_field(tmp_path):
     make_collection(tmp_path, bot_fields=tuple(f for f in REQUIRED_FIELDS if f != "MeaningTL"))
     with pytest.raises(AnkiConfigError, match="missing required fields: MeaningTL"):
         AnkiService.open(settings(tmp_path))
+
+
+def test_missing_optional_field_is_an_error_only_when_requested(tmp_path):
+    make_collection(tmp_path)
+    AnkiService.open(settings(tmp_path)).close()
+    with pytest.raises(AnkiConfigError, match="missing required fields: SentenceAudio"):
+        AnkiService.open(settings(tmp_path), optional_fields=(SENTENCE_AUDIO_FIELD,))
 
 
 def test_missing_deck_is_an_error_and_not_created(tmp_path):
@@ -240,6 +249,25 @@ def test_audio_uses_add_file_returned_name(open_service, tmp_path):
     result = service.add_note_if_absent(card("二", "に", audio=str(second)))
     audio = service.collection.get_note(result.note_id)["Audio"]
     assert audio.startswith("[sound:voice-") and audio.endswith(".mp3]")
+
+
+def test_sentence_audio_written_only_when_field_exists(open_service, tmp_path):
+    path = tmp_path / "src" / "sentence.mp3"
+    path.parent.mkdir()
+    path.write_bytes(b"ID3sentence")
+    with_field = open_service(bot_fields=(*REQUIRED_FIELDS, SENTENCE_AUDIO_FIELD))
+    note_card = dataclasses.replace(card("一", "いち"), sentence_audio=str(path))
+    result = with_field.add_note_if_absent(note_card)
+    assert with_field.collection.get_note(result.note_id)[SENTENCE_AUDIO_FIELD] == "[sound:sentence.mp3]"
+
+
+def test_sentence_audio_ignored_without_field(open_service, tmp_path):
+    path = tmp_path / "src" / "sentence.mp3"
+    path.parent.mkdir()
+    path.write_bytes(b"ID3sentence")
+    service = open_service()
+    result = service.add_note_if_absent(dataclasses.replace(card("一", "いち"), sentence_audio=str(path)))
+    assert result.status is AddStatus.ADDED
 
 
 def test_known_words_snapshot_is_copy_on_write(open_service):

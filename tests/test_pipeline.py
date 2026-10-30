@@ -107,6 +107,20 @@ async def test_examples_use_regular_kanji_forms(make_pipeline):
     assert examples.queries[0] == ("食べる",)
 
 
+async def test_tts_sentence_prefers_user_sentence_over_example(make_pipeline):
+    examples = FakeExamples({"食べる": "毎日パンを食べる。"})
+    pipeline = make_pipeline(examples=examples)
+    word = (await pipeline.process("たべる")).drafts[0].card
+    assert word.tts_sentence == "毎日パンを食べる。"
+    sentence = (await pipeline.process("<猫>が食べた。")).drafts
+    assert sentence and all(d.card.tts_sentence == "<猫>が食べた。" for d in sentence), "raw text, no markup"
+
+
+async def test_tts_sentence_empty_without_sentence_or_example(make_pipeline):
+    result = await make_pipeline().process("食べた")
+    assert result.drafts[0].card.tts_sentence == ""
+
+
 async def test_kanji_lemma_disambiguates_kana_homophones(make_pipeline):
     result = await make_pipeline().process("寝ることにした。")
     koto = next(d for d in result.drafts if d.card.reading == "こと")

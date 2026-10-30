@@ -12,7 +12,7 @@ from typing import Any
 
 from telegram.ext import Application
 
-from ankibot.anki_service import AnkiService
+from ankibot.anki_service import SENTENCE_AUDIO_FIELD, AnkiService
 from ankibot.bot import BotHandlers, build_application, prepare_persistence
 from ankibot.config import Settings
 from ankibot.examples import Examples
@@ -73,7 +73,8 @@ class Runtime:
         s = self.settings
         texts = load_texts(s.bot_language, s.bot_messages_file)
         flag = FullSyncFlag(s.full_sync_marker_path)
-        self.service = await self.anki.run(AnkiService.open, s, flag.is_set)
+        optional = (SENTENCE_AUDIO_FIELD,) if self.tts is not None and s.tts_sentence else ()
+        self.service = await self.anki.run(AnkiService.open, s, flag.is_set, optional)
         self.lookup, self._cache = await self.lookup_thread.run(_open_lookup, s)
         self.translator = make_translator(
             deepl_key=s.deepl_api_key,

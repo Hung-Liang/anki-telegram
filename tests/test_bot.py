@@ -9,7 +9,7 @@ from telegram.ext import PicklePersistence
 from telegram_fake import ALLOWED_USER, OTHER_USER, FakeTelegram
 from test_tts import FakeCommunicate
 
-from ankibot.anki_service import AnkiService
+from ankibot.anki_service import REQUIRED_FIELDS, SENTENCE_AUDIO_FIELD, AnkiService
 from ankibot.bot import BotHandlers, build_application
 from ankibot.config import Settings
 from ankibot.i18n import load_texts
@@ -92,8 +92,8 @@ class Env:
     async def sleep(self, seconds):
         self.sleeps.append(seconds)
 
-    async def open(self):
-        make_collection(self.tmp_path)
+    async def open(self, **schema):
+        make_collection(self.tmp_path, **schema)
         self.service = await self.anki.run(AnkiService.open, self.settings, self.flag.is_set)
         self.lookup = await self.lookup_thread.run(Lookup.create, False)
         self.sync = SyncManager(
@@ -728,6 +728,66 @@ async def test_audio_field_uses_sound_tag_with_media_file(env, tmp_path):
     assert (Path(media_dir) / name).read_bytes() == "ja-JP-NanamiNeural:たべる".encode()
     text, voice, _ = FakeCommunicate.instances[-1]
     assert (text, voice) == ("たべる", "ja-JP-NanamiNeural"), "TTS reads the reading, not the word"
+
+
+@pytest.fixture
+async def sentence_env(tmp_path):
+    e = Env(tmp_path)
+    e.settings = e.settings.model_copy(update={"tts_sentence": True})
+    await e.open(bot_fields=(*REQUIRED_FIELDS, SENTENCE_AUDIO_FIELD))
+    await e.start_bot()
+    try:
+        yield e
+    finally:
+        await e.close()
+
+
+async def note_audio(env, word):
+    def read():
+        col = env.service.collection
+        note = col.get_note(col.find_notes(f'"Word:{word}"')[0])
+        return note["Audio"], note[SENTENCE_AUDIO_FIELD]
+
+    return await env.anki.run(read)
+
+
+async def test_sentence_audio_speaks_the_user_sentence(sentence_env, tmp_path):
+    from ankibot.tts import EdgeTTS
+
+    tts = EdgeTTS(tmp_path / "tts", "ja-JP-NanamiNeural", 1, communicate=fake_edge())
+    await sentence_env.restart(tts=tts)
+    FakeCommunicate.instances.clear()
+    await save_first(sentence_env, "猫が魚を食べた。")
+    audio, sentence_audio = await note_audio(sentence_env, "食べる")
+    assert audio.startswith("[sound:tts-") and sentence_audio.startswith("[sound:tts-")
+    assert audio != sentence_audio
+    assert sorted(t for t, _, _ in FakeCommunicate.instances) == ["たべる", "猫が魚を食べた。"]
+
+
+async def test_sentence_audio_off_by_default(env, tmp_path):
+    from ankibot.tts import EdgeTTS
+
+    tts = EdgeTTS(tmp_path / "tts", "ja-JP-NanamiNeural", 1, communicate=fake_edge())
+    await env.restart(tts=tts)
+    FakeCommunicate.instances.clear()
+    await save_first(env, "猫が魚を食べた。")
+    assert [t for t, _, _ in FakeCommunicate.instances] == ["たべる"]
+
+
+async def test_sentence_audio_failure_still_saves_with_hint(sentence_env):
+    class SentenceFails:
+        async def synth(self, text):
+            if text == "猫が魚を食べた。":
+                raise RuntimeError("tts down")
+            path = sentence_env.tmp_path / "word.mp3"
+            path.write_bytes(b"ID3word")
+            return path
+
+    await sentence_env.restart(tts=SentenceFails())
+    mid = await save_first(sentence_env, "猫が魚を食べた。")
+    assert sentence_env.text(mid).splitlines()[-2:] == [T.hint_tts_failed, T.status_saved]
+    audio, sentence_audio = await note_audio(sentence_env, "食べる")
+    assert audio == "[sound:word.mp3]" and sentence_audio == ""
 
 
 class GatedTranslator(RecordingTranslator):

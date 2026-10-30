@@ -247,5 +247,6 @@ class Pipeline:
             audio="",
             source=html.escape(text),
             forms=entry.forms,
+            tts_sentence=text if is_sentence else (f.example or ""),
         )
         return Draft(content, card)

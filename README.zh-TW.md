@@ -98,6 +98,7 @@ make local-sync-reset   # 清空 server 資料後重新啟動（`make verify-syn
 ## 可選功能
 
 - **語音（edge-tts，預設關閉）**：設定 `TTS_PROVIDER=edge` 開啟。Save 時以 `TTS_VOICE` 唸 `Reading`，檔案存在 `/data/tts/`（檔名為 `(voice, text)` 的 hash），再匯入 Anki 媒體。edge-tts 是非官方端點，失敗時卡片照常建立，`Audio` 留空並提示「語音產生失敗」。
+  - **例句語音**：再設定 `TTS_SENTENCE=true`，每張卡另外唸一句存進 `SentenceAudio`：輸入句子時唸原句，輸入單字時唸 Tatoeba 例句，兩者都沒有就不產生。需先在 note type 新增 `SentenceAudio` 欄位（會觸發 full sync）並更新 `back.html`；缺欄位時啟動會報錯。同一句存多個單字只會合成一次。
 - **例句（Tatoeba）**：執行 `make build-tatoeba`（或 `docker compose run --rm bot python scripts/build_tatoeba.py`）下載日文句子並建立 `/data/tatoeba.db`；檔案不存在時自動停用。索引存的是 fugashi / unidic-lite 的斷詞結果，**升級這兩個套件後要重新執行**。資料來源：[Tatoeba](https://tatoeba.org)，授權 [CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/)。
 - **翻譯（DeepL 或 Gemini，二選一）**：設定 `DEEPL_API_KEY` 或 `GEMINI_API_KEY` 後，釋義、原句、例句會翻成目標語言（預設英文）；兩者都設定時啟動失敗。成功結果快取在 `/data/translations.db`（兩者分開存）。未設定時只顯示英文、完全不發請求；失敗時預覽只顯示英文並加一行「翻譯失敗」。
   - DeepL（**未實測**，只有單元測試；沒有用真實 API key 驗證過）：`:fx` 結尾的 Free key 自動使用 Free 端點。

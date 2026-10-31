@@ -4,6 +4,7 @@ data/
 __pycache__/
 *.egg-info/
 .venv/
+uv.lock
 .pytest_cache/
 .ruff_cache/
 build/

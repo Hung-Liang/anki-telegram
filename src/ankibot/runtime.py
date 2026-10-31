@@ -73,8 +73,7 @@ class Runtime:
         s = self.settings
         texts = load_texts(s.bot_language, s.bot_messages_file)
         flag = FullSyncFlag(s.full_sync_marker_path)
-        optional = (SENTENCE_AUDIO_FIELD,) if self.tts is not None and s.tts_sentence else ()
-        self.service = await self.anki.run(AnkiService.open, s, flag.is_set, optional)
+        self.service = await self.anki.run(AnkiService.open, s, flag.is_set)
         self.lookup, self._cache = await self.lookup_thread.run(_open_lookup, s)
         self.translator = make_translator(
             deepl_key=s.deepl_api_key,
@@ -101,7 +100,12 @@ class Runtime:
         pipeline = Pipeline(
             self.lookup_thread, self.lookup, self.service.known_words, self.sync.ensure_fresh, self.translator
         )
-        self.handlers = BotHandlers(s, pipeline, self.sync, self._stats, self.tts, texts=texts)
+        sentence_audio = SENTENCE_AUDIO_FIELD in self.service.schema.field_index
+        if self.tts is not None and not sentence_audio:
+            log.info("note type has no %s field; sentence audio is off", SENTENCE_AUDIO_FIELD)
+        self.handlers = BotHandlers(
+            s, pipeline, self.sync, self._stats, self.tts, texts=texts, sentence_audio=sentence_audio
+        )
         persistence = prepare_persistence(s.data_dir / "bot_state.pickle")
         self.app = build_application(s, self.handlers, request=self._request, persistence=persistence)
 

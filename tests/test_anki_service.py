@@ -112,13 +112,6 @@ def test_missing_required_field(tmp_path):
         AnkiService.open(settings(tmp_path))
 
 
-def test_missing_optional_field_is_an_error_only_when_requested(tmp_path):
-    make_collection(tmp_path)
-    AnkiService.open(settings(tmp_path)).close()
-    with pytest.raises(AnkiConfigError, match="missing required fields: SentenceAudio"):
-        AnkiService.open(settings(tmp_path), optional_fields=(SENTENCE_AUDIO_FIELD,))
-
-
 def test_missing_deck_is_an_error_and_not_created(tmp_path):
     make_collection(tmp_path, deck=False)
     with pytest.raises(AnkiConfigError, match="Deck 'Japanese::Bot' not found"):

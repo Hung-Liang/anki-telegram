@@ -55,8 +55,6 @@ class Settings(AnkiSettings):
     tts_provider: Literal["none", "edge"] = "none"
     tts_voice: str = "ja-JP-NanamiNeural"
     tts_timeout_seconds: float = 15
-    # Also speak one sentence per card into SentenceAudio; the note type needs that field.
-    tts_sentence: bool = False
     deepl_api_key: SecretStr | None = None
     deepl_timeout_seconds: float = 10
     gemini_api_key: SecretStr | None = None

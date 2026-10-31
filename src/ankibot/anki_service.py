@@ -4,7 +4,7 @@ import dataclasses
 import fcntl
 import html
 import re
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
@@ -41,7 +41,7 @@ CARD_FIELDS = {
     "ExampleTL": "example_tl",
     "Source": "source",
 }
-# Optional: only needed when TTS_SENTENCE is on.
+# Optional: sentence audio is written only when the note type has this field.
 SENTENCE_AUDIO_FIELD = "SentenceAudio"
 FIELD_SEPARATOR = "\x1f"
 NAME_RULE = "Note type and field names must not contain ':' or ';'; rename them in Anki desktop."
@@ -139,10 +139,7 @@ def _field_names(col: Collection, notetype_id: int) -> list[str]:
     return [f["name"] for f in col.models.get(notetype_id)["flds"]]
 
 
-def validate_collection(
-    col: Collection, notetype: str, deck: str, extra_sources: str, optional_fields: Sequence[str] = ()
-) -> CollectionSchema:
-    """`optional_fields`: fields not in REQUIRED_FIELDS that the enabled features still need."""
+def validate_collection(col: Collection, notetype: str, deck: str, extra_sources: str) -> CollectionSchema:
     specs = parse_extra_sources(extra_sources)
     nt = col.models.by_name(notetype)
     if nt is None:
@@ -151,7 +148,7 @@ def validate_collection(
             f"{', '.join(REQUIRED_FIELDS)}, sync, then run bootstrap again."
         )
     names = _field_names(col, nt["id"])
-    missing = [f for f in (*REQUIRED_FIELDS, *optional_fields) if f not in names]
+    missing = [f for f in REQUIRED_FIELDS if f not in names]
     if missing:
         raise AnkiConfigError(f"Note type {notetype!r} is missing required fields: {', '.join(missing)}")
     # decks.id() would create the deck; id_for_name() only looks it up.
@@ -262,10 +259,7 @@ class AnkiService:
 
     @classmethod
     def open(
-        cls,
-        settings: AnkiSettings,
-        full_sync_required: Callable[[], bool] = lambda: False,
-        optional_fields: Sequence[str] = (),
+        cls, settings: AnkiSettings, full_sync_required: Callable[[], bool] = lambda: False
     ) -> AnkiService:
         path = settings.collection_path
         # Collection() silently creates a new file, which would later force a full sync.
@@ -274,7 +268,7 @@ class AnkiService:
         col = Collection(str(path))
         try:
             schema = validate_collection(
-                col, settings.anki_notetype, settings.anki_deck, settings.dedup_extra_sources, optional_fields
+                col, settings.anki_notetype, settings.anki_deck, settings.dedup_extra_sources
             )
         except BaseException:
             col.close()

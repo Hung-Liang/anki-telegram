@@ -118,7 +118,14 @@ class Env:
             return await self.anki.run(self.service.stats)
 
         self.handlers = BotHandlers(
-            self.settings, pipeline, self.sync, stats, tts, now=self.clock, sleep=self.sleep
+            self.settings,
+            pipeline,
+            self.sync,
+            stats,
+            tts,
+            sentence_audio=SENTENCE_AUDIO_FIELD in self.service.schema.field_index,
+            now=self.clock,
+            sleep=self.sleep,
         )
         persistence = PicklePersistence(self.tmp_path / "bot_state.pickle")
         self.app = build_application(self.settings, self.handlers, request=self.fake, persistence=persistence)
@@ -733,7 +740,6 @@ async def test_audio_field_uses_sound_tag_with_media_file(env, tmp_path):
 @pytest.fixture
 async def sentence_env(tmp_path):
     e = Env(tmp_path)
-    e.settings = e.settings.model_copy(update={"tts_sentence": True})
     await e.open(bot_fields=(*REQUIRED_FIELDS, SENTENCE_AUDIO_FIELD))
     await e.start_bot()
     try:
@@ -764,7 +770,7 @@ async def test_sentence_audio_speaks_the_user_sentence(sentence_env, tmp_path):
     assert sorted(t for t, _, _ in FakeCommunicate.instances) == ["たべる", "猫が魚を食べた。"]
 
 
-async def test_sentence_audio_off_by_default(env, tmp_path):
+async def test_sentence_audio_off_without_field(env, tmp_path):
     from ankibot.tts import EdgeTTS
 
     tts = EdgeTTS(tmp_path / "tts", "ja-JP-NanamiNeural", 1, communicate=fake_edge())

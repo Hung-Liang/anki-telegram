@@ -108,6 +108,7 @@ class BotHandlers:
         tts: TTSProvider | None = None,
         *,
         texts: Texts | None = None,
+        sentence_audio: bool = False,
         now: Callable[[], float] = time.time,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
@@ -116,6 +117,7 @@ class BotHandlers:
         self._sync = sync
         self._stats = stats
         self._tts = tts
+        self._sentence_audio = sentence_audio
         self._t = texts or load_texts(settings.bot_language, settings.bot_messages_file)
         self._preview_keyboard = preview_keyboard(self._t)
         self._now = now
@@ -357,7 +359,7 @@ class BotHandlers:
         waiting = self._t.status_queued if self._sync.is_syncing else self._t.status_saving
         await self._edit(bot, chat_id, mid, with_status(preview.body_html, waiting), None)
 
-        sentence = preview.card.tts_sentence if self._settings.tts_sentence else ""
+        sentence = preview.card.tts_sentence if self._sentence_audio else ""
         (audio, word_failed), (sentence_audio, sentence_failed) = await asyncio.gather(
             self._synthesize(preview.card.reading),
             self._synthesize(sentence) if sentence else _no_audio(),

@@ -31,7 +31,6 @@
 
 {{#Sentence}}
 <div style='font-size: 25px;'>{{Sentence}}</div>
-{{#SentenceAudio}}<div>{{SentenceAudio}}</div>{{/SentenceAudio}}
 <div style='padding-bottom:10px'>
   {{#SentenceTL}}
   <div lang="en" class="zh">{{SentenceTL}}</div>
@@ -41,8 +40,6 @@
 
 {{#ExampleJP}}
 <div style='font-size: 20px;'>{{ExampleJP}}</div>
-<!-- SentenceAudio speaks the user's sentence when there is one, otherwise this example. -->
-{{^Sentence}}{{#SentenceAudio}}<div>{{SentenceAudio}}</div>{{/SentenceAudio}}{{/Sentence}}
 <div style='padding-bottom:10px'>
   {{#ExampleTL}}
   <div lang="en" class="zh-sub">{{ExampleTL}}</div>
@@ -57,6 +54,7 @@
 {{/MeaningTL}}
 
 {{Audio}}
+{{SentenceAudio}}
 
 <!-- Source duplicates Sentence for sentence input, so show it only for word input. -->
 {{^Sentence}}

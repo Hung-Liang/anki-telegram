@@ -8,7 +8,7 @@
 
 - 傳單字或整句日文：以 fugashi（unidic-lite）斷詞、還原辭書形，查 [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html)，扣除 Anki 裡已有的字後，每個新字各送一則預覽。
 - 預覽內容：字（讀音）、前 3 個意思（翻譯＋英文原文）、Tatoeba 例句與翻譯；來自句子時附原句（目標字粗體）與原句翻譯。
-- 按鈕：💾 Save 寫入 Anki（可選 edge-tts 語音）、🗑 Discard 捨棄、↩️ Undo 刪除剛存的卡。
+- 按鈕：💾 Save 寫入 Anki（可選 edge-tts 語音）、🗑 Discard 捨棄、↩️ Undo 刪除剛存的卡、🔄 Retry（翻譯失敗時出現）只重新翻譯該則預覽。
 - 透過自架 Anki sync server 同步（`ANKI_SYNC_ENDPOINT` 必填；debounce 2 小時，每次新增／刪除都重新計時；可用 `/sync` 立即同步；距上次同步超過 72 小時時，處理訊息前會先做一次資料庫同步），手機與桌面 Anki sync 後就看得到新卡。
 - 只回應白名單中的一個 Telegram 帳號。
 
@@ -100,9 +100,9 @@ make local-sync-reset   # 清空 server 資料後重新啟動（`make verify-syn
 - **語音（edge-tts，預設關閉）**：設定 `TTS_PROVIDER=edge` 開啟。Save 時以 `TTS_VOICE` 唸 `Reading`，檔案存在 `/data/tts/`（檔名為 `(voice, text)` 的 hash），再匯入 Anki 媒體。edge-tts 是非官方端點，失敗時卡片照常建立，`Audio` 留空並提示「語音產生失敗」。
   - **例句語音**：note type 有 `SentenceAudio` 欄位時，每張卡另外唸一句存進該欄位：輸入句子時唸原句，輸入單字時唸 Tatoeba 例句，兩者都沒有就不產生。新增欄位會觸發 full sync，並需更新 `back.html`；沒有這個欄位就不產生例句語音。同一句存多個單字只會合成一次。
 - **例句（Tatoeba）**：執行 `make build-tatoeba`（或 `docker compose run --rm bot python scripts/build_tatoeba.py`）下載日文句子並建立 `/data/tatoeba.db`；檔案不存在時自動停用。索引存的是 fugashi / unidic-lite 的斷詞結果，**升級這兩個套件後要重新執行**。資料來源：[Tatoeba](https://tatoeba.org)，授權 [CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/)。
-- **翻譯（DeepL 或 Gemini，二選一）**：設定 `DEEPL_API_KEY` 或 `GEMINI_API_KEY` 後，釋義、原句、例句會翻成目標語言（預設英文）；兩者都設定時啟動失敗。成功結果快取在 `/data/translations.db`（兩者分開存）。未設定時只顯示英文、完全不發請求；失敗時預覽只顯示英文並加一行「翻譯失敗」。
+- **翻譯（DeepL 或 Gemini，二選一）**：設定 `DEEPL_API_KEY` 或 `GEMINI_API_KEY` 後，釋義、原句、例句會翻成目標語言（預設英文）；兩者都設定時啟動失敗。成功結果快取在 `/data/translations.db`（兩者分開存）。未設定時只顯示英文、完全不發請求；失敗時預覽只顯示英文並加一行「翻譯失敗」，按鈕為 🔄 Retry / 🗑 Discard，重試成功前無法儲存（長時間故障時，例如額度用完，這些字要等服務恢復才能儲存）。
   - DeepL（**未實測**，只有單元測試；沒有用真實 API key 驗證過）：`:fx` 結尾的 Free key 自動使用 Free 端點。
-  - Gemini：預設模型 `gemini-3.5-flash-lite`（`GEMINI_MODEL` 可改），免費額度用完時回 HTTP 429，預覽改為只顯示英文。每個新字約 2 個請求、不重試；實測一次傳約 60 個新字的長句會超過每分鐘上限，大部分預覽翻譯失敗（約 1 分鐘後恢復，重傳時已成功的翻譯走快取）。免費方案的輸入可能被 Google 用於改善模型。
+  - Gemini：預設模型 `gemini-3.5-flash-lite`（`GEMINI_MODEL` 可改），免費額度用完時回 HTTP 429，預覽改為只顯示英文並提供 🔄 Retry。每個新字約 2 個請求、不自動重試；實測一次傳約 60 個新字的長句會超過每分鐘上限，大部分預覽翻譯失敗（約 1 分鐘後恢復，按 Retry 時已成功的翻譯走快取）。免費方案的輸入可能被 Google 用於改善模型。
 - **翻譯目標語言**：
   - `TRANSLATION_TARGET`：DeepL 的 `target_lang` 代碼，預設 `EN-US`，例如 `ZH-HANT`、`ZH-HANS`、`KO`。DeepL 不接受單獨的 `EN`，要用 `EN-US` 或 `EN-GB`。
   - `TRANSLATION_TARGET_NAME`：Gemini prompt 裡的語言名稱（例如 `Korean`）。留空時 `ZH-HANT` 用「Traditional Chinese as used in Taiwan」，其他語言直接用代碼。

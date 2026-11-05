@@ -24,6 +24,7 @@ example = "例：{example}"
 save = "💾 Save"
 discard = "🗑 Discard"
 undo = "↩️ Undo"
+retry = "🔄 Retry"
 
 [answer]
 expired = "已過期或已處理"

@@ -40,6 +40,7 @@ class Texts:
     button_save: str
     button_discard: str
     button_undo: str
+    button_retry: str
     answer_expired: str
     answer_note_gone: str
     answer_rejected: str

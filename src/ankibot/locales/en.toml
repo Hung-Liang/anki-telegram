@@ -24,6 +24,7 @@ example = "e.g. {example}"
 save = "💾 Save"
 discard = "🗑 Discard"
 undo = "↩️ Undo"
+retry = "🔄 Retry"
 
 [answer]
 expired = "Expired or already handled"

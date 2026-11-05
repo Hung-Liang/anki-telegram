@@ -689,7 +689,7 @@ async def test_deepl_timeout_still_sends_english_preview_in_time(env, tmp_path):
     start = loop.time()
     await env.send("猫が好き。")
     assert loop.time() - start < 2
-    previews = env.previews()
+    previews = env.fake.sent()
     assert previews
     for p in previews:
         lines = p["text"].splitlines()
@@ -838,10 +838,165 @@ async def test_translation_crash_still_offers_english_preview(env):
 
     await env.restart(translator=CrashingTranslator())
     await env.send("猫が魚を食べた。")
-    previews = env.previews()
-    assert len(previews) == 3 and len(env.fake.sent()) == 3
+    previews = env.fake.sent()
+    assert len(previews) == 3
     for p in previews:
         lines = p["text"].splitlines()
         assert lines[-1] == "Translation failed" and "Translating…" not in lines
-    await env.press(previews[0]["message_id"], "save")
-    assert await env.words() == ["猫"]
+        assert env.buttons(p["message_id"]) == ["retry", "discard"]
+    assert env.previews() == []
+
+
+class FlakyTranslator(RecordingTranslator):
+    """Fails while `failing` is set (those calls are not recorded); `gate` can hold a call in flight."""
+
+    def __init__(self, failing=True):
+        super().__init__()
+        self.failing = failing
+        self.gate = None
+        self.entered = asyncio.Event()
+
+    async def translate(self, texts, source_lang, context=None):
+        self.entered.set()
+        if self.gate is not None:
+            await self.gate.wait()
+        if self.failing:
+            return None
+        return await super().translate(texts, source_lang, context)
+
+
+async def failed_preview(env, translator, text="食べた"):
+    await env.restart(translator=translator)
+    await env.send(text)
+    [mid] = [m["message_id"] for m in env.fake.sent()]
+    assert env.buttons(mid) == ["retry", "discard"]
+    return mid
+
+
+async def test_retry_success_offers_save_on_the_same_message(env):
+    translator = FlakyTranslator()
+    mid = await failed_preview(env, translator)
+    translator.failing = False
+    await env.press(mid, "retry")
+    assert [m["message_id"] for m in env.fake.sent()] == [mid]
+    assert env.text(mid).splitlines()[1].startswith("1. 中:")
+    assert "Translation failed" not in env.text(mid)
+    assert env.buttons(mid) == ["save", "discard"]
+    await env.press(mid, "save")
+
+    def meaning_tl():
+        col = env.service.collection
+        return col.get_note(col.find_notes('"Word:食べる"')[0])["MeaningTL"]
+
+    assert (await env.anki.run(meaning_tl)).startswith("中:")
+
+
+async def test_retry_translates_only_the_pressed_preview(env):
+    translator = FlakyTranslator()
+    await env.restart(translator=translator)
+    await env.send("猫が魚を食べた。")
+    cat, fish, eat = (m["message_id"] for m in env.fake.sent())
+    before = {mid: env.text(mid) for mid in (cat, eat)}
+    translator.failing = False
+    await env.press(fish, "retry")
+    assert [c[2] for c in translator.calls if c[1] == "EN"] == ["魚（さかな） 猫が魚を食べた。"]
+    assert "魚（さかな）" in env.text(fish).splitlines()
+    assert env.buttons(fish) == ["save", "discard"]
+    for mid in (cat, eat):
+        assert env.text(mid) == before[mid]
+        assert env.buttons(mid) == ["retry", "discard"]
+
+
+async def test_retry_after_crash_midway_translates_the_right_word(env):
+    class CrashesOnFish(RecordingTranslator):
+        crash = True
+
+        async def translate(self, texts, source_lang, context=None):
+            if self.crash and context and "魚（さかな）" in context:
+                raise RuntimeError("boom")
+            return await super().translate(texts, source_lang, context)
+
+    translator = CrashesOnFish()
+    await env.restart(translator=translator)
+    await env.send("猫が魚を食べた。")
+    cat, fish, eat = (m["message_id"] for m in env.fake.sent())
+    assert env.buttons(cat) == ["save", "discard"]
+    assert env.buttons(fish) == env.buttons(eat) == ["retry", "discard"]
+    translator.crash = False
+    await env.press(eat, "retry")
+    assert "食べる（たべる）" in env.text(eat).splitlines()
+    assert env.buttons(eat) == ["save", "discard"]
+    await env.press(eat, "save")
+    assert await env.words() == ["食べる"]
+
+
+async def test_retry_failing_again_offers_retry_with_a_fresh_ttl(env):
+    mid = await failed_preview(env, FlakyTranslator())
+    env.clock.t += TTL_HOURS * 3600 - 1
+    await env.press(mid, "retry")
+    assert last_line(env.text(mid)) == "Translation failed"
+    assert env.buttons(mid) == ["retry", "discard"]
+    env.clock.t += TTL_HOURS * 3600 - 1
+    await env.press(mid, "retry")
+    assert EXPIRED not in env.fake.answers()
+    assert env.buttons(mid) == ["retry", "discard"]
+
+
+async def test_second_retry_press_while_in_flight_translates_once(env):
+    translator = FlakyTranslator()
+    mid = await failed_preview(env, translator)
+    translator.failing = False
+    translator.gate = asyncio.Event()
+    translator.entered.clear()
+    first = asyncio.create_task(env.press(mid, "retry"))
+    await asyncio.wait_for(translator.entered.wait(), 5)
+    assert "1. Translating…" in env.text(mid).splitlines()
+    assert env.buttons(mid) == []
+    await asyncio.wait_for(env.press(mid, "retry"), 5)
+    assert env.fake.answers()[-1] == EXPIRED
+    translator.gate.set()
+    await first
+    assert len(translator.calls) == 1
+    assert env.buttons(mid) == ["save", "discard"]
+
+
+async def test_retry_works_after_restart(env):
+    mid = await failed_preview(env, FlakyTranslator())
+    translator = FlakyTranslator(failing=False)
+    await env.restart(translator=translator)
+    await env.press(mid, "retry")
+    assert len(translator.calls) == 1
+    assert env.text(mid).splitlines()[1].startswith("1. 中:")
+    assert env.buttons(mid) == ["save", "discard"]
+
+
+async def test_retry_without_translator_is_not_stuck(env):
+    mid = await failed_preview(env, FlakyTranslator())
+    await env.restart()
+    await env.press(mid, "retry")
+    assert "Translating…" not in env.text(mid)
+    assert last_line(env.text(mid)) == "Translation failed"
+    assert env.buttons(mid) == ["retry", "discard"]
+    await env.press(mid, "discard")
+    assert last_line(env.text(mid)) == T.status_discarded
+    assert mid not in env.user_previews()
+
+
+async def test_retry_on_expired_preview_answers_expired(env):
+    translator = FlakyTranslator()
+    mid = await failed_preview(env, translator)
+    translator.failing = False
+    env.clock.t += TTL_HOURS * 3600
+    await env.press(mid, "retry")
+    assert env.fake.answers()[-1] == EXPIRED
+    assert translator.calls == []
+
+
+async def test_retry_on_preview_without_retry_data_answers_expired(env):
+    await env.send("食べた")
+    mid = env.previews()[0]["message_id"]
+    await env.press(mid, "retry")
+    assert env.fake.answers()[-1] == EXPIRED
+    assert mid in env.user_previews()
+    await env.press(mid, "save")
+    assert await env.words() == ["食べる"]

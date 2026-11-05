@@ -39,7 +39,7 @@ from ankibot.anki_service import AddStatus, DeleteStatus, Stats
 from ankibot.config import Settings
 from ankibot.i18n import Texts, load_texts
 from ankibot.messages import headword, render_preview, replace_status, with_status
-from ankibot.pipeline import Draft, Pipeline
+from ankibot.pipeline import Draft, Pipeline, PipelineResult
 from ankibot.state import (
     Preview,
     PreviewStatus,
@@ -55,6 +55,7 @@ log = logging.getLogger(__name__)
 
 SAVE = "save"
 DISCARD = "discard"
+RETRY = "retry"
 UNDO_PREFIX = "undo:"
 MAX_RETRY_AFTER = 5
 CLEANUP_INTERVAL_SECONDS = 600
@@ -69,6 +70,17 @@ def preview_keyboard(t: Texts) -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(t.button_save, callback_data=SAVE),
+                InlineKeyboardButton(t.button_discard, callback_data=DISCARD),
+            ]
+        ]
+    )
+
+
+def retry_keyboard(t: Texts) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(t.button_retry, callback_data=RETRY),
                 InlineKeyboardButton(t.button_discard, callback_data=DISCARD),
             ]
         ]
@@ -120,6 +132,7 @@ class BotHandlers:
         self._sentence_audio = sentence_audio
         self._t = texts or load_texts(settings.bot_language, settings.bot_messages_file)
         self._preview_keyboard = preview_keyboard(self._t)
+        self._retry_keyboard = retry_keyboard(self._t)
         self._now = now
         self._sleep = sleep
         self._ttl = settings.pending_ttl_hours * 3600
@@ -252,30 +265,53 @@ class BotHandlers:
 
         if not result.translating:
             return
+        await self._finish_translating(context, chat_id, result, sent_ids)
+
+    async def _finish_translating(
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
+        chat_id: int,
+        result: PipelineResult,
+        sent_ids: list[int | None],
+    ) -> None:
         done = 0
         try:
             async for draft in self._pipeline.translate(result):
-                await self._offer(context, chat_id, draft, sent_ids[done])
+                await self._offer(context, chat_id, draft, sent_ids[done], result.only(done))
                 done += 1
         except Exception:
-            log.exception("translating %r failed", text)
-            for draft, message_id in zip(
-                self._pipeline.untranslated(result)[done:], sent_ids[done:], strict=True
-            ):
-                await self._offer(context, chat_id, draft, message_id)
+            log.exception("translating %r failed", result.text)
+        # Outside the except: translate() also ends early without raising when the translator is
+        # gone after a restart, and those placeholders must not stay stuck.
+        for offset, (draft, message_id) in enumerate(
+            zip(self._pipeline.untranslated(result)[done:], sent_ids[done:], strict=True)
+        ):
+            await self._offer(context, chat_id, draft, message_id, result.only(done + offset))
 
     async def _offer(
-        self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, draft: Draft, message_id: int | None
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
+        chat_id: int,
+        draft: Draft,
+        message_id: int | None,
+        source: PipelineResult | None = None,
     ) -> None:
-        """Show the final preview with Save / Discard: edit the placeholder, or send a new message."""
+        """Show the final preview: edit the placeholder, or send a new message.
+
+        Save / Discard, or Retry / Discard when the translation failed.
+        """
         bot, body = context.bot, render_preview(draft.content, self._t)
-        if message_id is None or not await self._edit(bot, chat_id, message_id, body, self._preview_keyboard):
-            sent = await self._send(bot, chat_id, body, self._preview_keyboard)
+        failed = draft.content.translation_failed
+        markup = self._retry_keyboard if failed else self._preview_keyboard
+        if message_id is None or not await self._edit(bot, chat_id, message_id, body, markup):
+            sent = await self._send(bot, chat_id, body, markup)
             if sent is None:
                 return
             message_id = sent.message_id
         previews = get_previews(context.user_data)
-        previews[message_id] = Preview(chat_id, message_id, body, draft.card, self._now())
+        previews[message_id] = Preview(
+            chat_id, message_id, body, draft.card, self._now(), retry=source if failed else None
+        )
 
     # --- buttons -------------------------------------------------------------------
 
@@ -285,6 +321,8 @@ class BotHandlers:
             await self._undo(update, context, data.removeprefix(UNDO_PREFIX))
         elif data in (SAVE, DISCARD):
             await self._save_or_discard(update, context, data)
+        elif data == RETRY:
+            await self._retry(update, context)
         else:
             await self._answer(update, self._t.answer_expired)
 
@@ -326,6 +364,22 @@ class BotHandlers:
             await self._save(context, preview)
         except SaveInterrupted:
             log.info("save of message %s interrupted by shutdown; it stays SAVING", message_id)
+
+    async def _retry(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        message_id = query.message.message_id if query.message is not None else None
+        preview = self._take_pending(context, message_id)
+        if preview is None or preview.retry is None:
+            await self._answer(update, self._t.answer_expired)
+            return
+        # Removed before awaiting so a second press sees it as handled.
+        # shortcut: a crash mid-retry leaves the message on "Translating…" with no buttons and the word
+        # must be resent; stuck for at most one timeout, so add state only if this actually happens.
+        del get_previews(context.user_data)[message_id]
+        await self._answer(update)
+        placeholder = render_preview(preview.retry.drafts[0].content, self._t)
+        await self._edit(context.bot, preview.chat_id, message_id, placeholder, None)
+        await self._finish_translating(context, preview.chat_id, preview.retry, [message_id])
 
     async def _synthesize(self, reading: str) -> tuple[str, bool]:
         """(audio path or "", failed)."""

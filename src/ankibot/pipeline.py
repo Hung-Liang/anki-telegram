@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import html
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
@@ -121,6 +122,15 @@ class PipelineResult:
     found: tuple[Found, ...] = ()
     # The drafts are placeholders until `Pipeline.translate` delivers the translated ones.
     translating: bool = False
+
+    def only(self, index: int) -> PipelineResult:
+        return dataclasses.replace(
+            self,
+            drafts=(self.drafts[index],),
+            existing=(),
+            not_found=(),
+            found=(self.found[index],),
+        )
 
 
 def _join_escaped(items: Sequence[str]) -> str:

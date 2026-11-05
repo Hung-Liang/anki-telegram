@@ -167,6 +167,21 @@ async def test_process_returns_placeholders_and_translate_yields_final_drafts(ma
         assert d.card.meaning_tl.startswith("中:")
 
 
+async def test_only_translates_just_the_chosen_word(make_pipeline):
+    pipeline = make_pipeline(known(("猫", "ねこ")), translator=EchoTranslator())
+    result = await pipeline.process("猫が魚を食べた。")
+    assert result.existing == ("猫",)
+    single = result.only(1)
+    assert [d.card.word for d in single.drafts] == ["食べる"]
+    assert [f.entry.word for f in single.found] == ["食べる"]
+    assert single.existing == () and single.not_found == ()
+    assert single.drafts[0].content.translating
+    translated = [d async for d in pipeline.translate(single)]
+    assert [d.card.word for d in translated] == ["食べる"]
+    assert translated[0].content.sentence_tl == "中:猫が魚を食べた。"
+    assert translated[0].card.meaning_tl.startswith("中:")
+
+
 async def test_untranslated_drafts_are_marked_failed(make_pipeline):
     pipeline = make_pipeline(translator=EchoTranslator())
     result = await pipeline.process("食べた")

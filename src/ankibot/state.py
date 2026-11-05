@@ -14,9 +14,12 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ankibot.models import CardData
+
+if TYPE_CHECKING:
+    from ankibot.pipeline import PipelineResult
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +41,7 @@ class Preview:
     # Unix time, so it stays meaningful across restarts.
     created_at: float
     status: PreviewStatus = PreviewStatus.PENDING
+    retry: PipelineResult | None = None
 
     def with_status(self, status: PreviewStatus) -> Preview:
         return dataclasses.replace(self, status=status)

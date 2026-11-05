@@ -1,7 +1,11 @@
+import dataclasses
 import pickle
 
 from anki_helpers import card
 
+from ankibot.messages import PreviewContent
+from ankibot.models import Candidate, Entry
+from ankibot.pipeline import Draft, Found, PipelineResult
 from ankibot.state import Preview, PreviewStatus, expire, get_previews, load_persistence_file, reset_saving
 
 TTL = 24 * 3600
@@ -46,6 +50,55 @@ def test_reset_saving_turns_saving_into_pending():
 def test_preview_survives_pickle():
     p = preview(7, status=PreviewStatus.SAVING)
     assert pickle.loads(pickle.dumps(p)) == p
+
+
+def test_preview_with_retry_survives_pickle():
+    content = PreviewContent(
+        word="食べる",
+        reading="たべる",
+        senses=("to eat",),
+        senses_tl=None,
+        sentence="魚を食べた。",
+        start=2,
+        end=4,
+        sentence_tl=None,
+        example=None,
+        example_tl=None,
+        translation_failed=False,
+        translating=True,
+    )
+    candidate = Candidate(surface="食べ", lemma="食べる", reading="たべる", start=2, end=4, pos="動詞")
+    entry = Entry(
+        word="食べる",
+        reading="たべる",
+        forms=("たべる", "食べる"),
+        example_forms=("食べる",),
+        senses=("to eat",),
+        is_common=True,
+        pos=("v1",),
+    )
+    retry = PipelineResult(
+        drafts=(Draft(content, card("食べる", "たべる")),),
+        existing=(),
+        not_found=(),
+        text="魚を食べた。",
+        is_sentence=True,
+        found=(Found(candidate, entry, None),),
+        translating=True,
+    )
+    p = dataclasses.replace(preview(7), retry=retry)
+    loaded = pickle.loads(pickle.dumps(p))
+    assert loaded == p
+    assert loaded.retry == retry
+
+
+def test_pickle_from_before_retry_reads_none():
+    p = preview(7)
+    object.__delattr__(p, "retry")
+    assert "retry" not in vars(p)
+    loaded = pickle.loads(pickle.dumps(p))
+    assert loaded.retry is None
+    assert loaded.with_status(PreviewStatus.SAVING).retry is None
 
 
 def test_corrupt_persistence_file_is_moved_aside(tmp_path):

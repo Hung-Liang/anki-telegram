@@ -33,16 +33,16 @@ class Examples:
         return cls(sqlite3.connect(f"file:{path}?mode=ro", uri=True))
 
     def find(self, forms: Sequence[str]) -> str | None:
-        forms = list(dict.fromkeys(forms))
-        if not forms:
-            return None
-        marks = ", ".join("?" * len(forms))
-        row = self._con.execute(
-            "select s.text from sentence_words w join sentences s on s.id = w.sentence_id "
-            f"where w.form in ({marks}) order by length(s.text), s.id limit 1",
-            forms,
-        ).fetchone()
-        return row[0] if row else None
+        # Forms are tried in JMdict order: a later variant (欠 for 欠伸) also spells other words (ガス欠).
+        for form in dict.fromkeys(forms):
+            row = self._con.execute(
+                "select s.text from sentence_words w join sentences s on s.id = w.sentence_id "
+                "where w.form = ? order by length(s.text), s.id limit 1",
+                (form,),
+            ).fetchone()
+            if row:
+                return row[0]
+        return None
 
     def close(self) -> None:
         self._con.close()

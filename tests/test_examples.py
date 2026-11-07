@@ -15,6 +15,8 @@ SENTENCES = [
     (4, "jpn", "毎晩テレビをよく見る。"),
     (5, "jpn", "木がある。"),
     (6, "jpn", "大きな木の下で本を読むのが好きです。"),
+    (8, "jpn", "ガス欠です。"),
+    (9, "jpn", "子供があくびをした。"),
     (7, "eng", "I eat bread."),
 ]
 
@@ -33,7 +35,7 @@ def db(tmp_path_factory):
     source.write_text("".join(f"{i}\t{lang}\t{text}\n" for i, lang, text in SENTENCES), encoding="utf-8")
     out = tmp / "tatoeba.db"
     count = load_script().build(source.open(encoding="utf-8"), out, Tokenizer())
-    assert count == 6
+    assert count == 8
     return out
 
 
@@ -58,6 +60,11 @@ def test_compound_containing_the_word_is_not_matched(examples):
     # The 夢見る sentence is shorter, but 見る must not match inside 夢見る.
     assert examples.find(("ゆめみる", "夢見る")) == "目を閉じて夢見る。"
     assert examples.find(("みる", "見る")) == "毎晩テレビをよく見る。"
+
+
+def test_earlier_form_wins_over_a_shorter_match_of_a_later_one(examples):
+    # 欠 is a rare spelling of 欠伸 and also part of ガス欠.
+    assert examples.find(("欠伸", "欠")) == "子供があくびをした。"
 
 
 def test_unknown_word_returns_none(examples):

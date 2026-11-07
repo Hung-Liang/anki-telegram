@@ -18,6 +18,8 @@ log = logging.getLogger(__name__)
 FREE_ENDPOINT = "https://api-free.deepl.com/v2/translate"
 PRO_ENDPOINT = "https://api.deepl.com/v2/translate"
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+# Backoff before each retry of an HTTP 503 reply.
+RETRY_503_DELAYS = (1.0, 3.0)
 _LANGUAGE_NAMES = {"EN": "English", "JA": "Japanese"}
 _TARGET_NAMES = {"ZH-HANT": "Traditional Chinese as used in Taiwan"}
 GEMINI_INSTRUCTION = (
@@ -111,9 +113,15 @@ class CachedTranslator:
 
     async def _request(self, texts: list[str], source_lang: str, context: str | None) -> list[str] | None:
         try:
-            # One overall limit covering connect and read; no retry.
-            async with asyncio.timeout(self._timeout):
-                response = await self._send(texts, source_lang, context)
+            for delay in (*RETRY_503_DELAYS, None):
+                # One overall limit per attempt, covering connect and read.
+                async with asyncio.timeout(self._timeout):
+                    response = await self._send(texts, source_lang, context)
+                # 503 means the provider is briefly overloaded; anything else fails at once.
+                if response.status_code != 503 or delay is None:
+                    break
+                log.info("%s returned HTTP 503; retrying in %ss", self.name, delay)
+                await asyncio.sleep(delay)
             response.raise_for_status()
             out = self._parse(response)
         except TimeoutError:

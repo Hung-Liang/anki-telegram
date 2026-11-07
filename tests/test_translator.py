@@ -334,3 +334,31 @@ async def test_factory_passes_the_target(tmp_path):
     finally:
         await thread.run(cache.close)
         thread.shutdown()
+
+
+@pytest.fixture
+def no_backoff(monkeypatch):
+    monkeypatch.setattr("ankibot.translator.RETRY_503_DELAYS", (0, 0))
+
+
+async def test_gemini_503_is_retried(make_gemini, no_backoff):
+    translator, server = await make_gemini()
+    server.responses = [httpx.Response(503, json={}), httpx.Response(503, json={})]
+    assert await translator.translate(["a"], "EN") == ["中:a"]
+    assert len(server.requests) == 3
+
+
+async def test_503_gives_up_after_the_retries(make, no_backoff, caplog):
+    translator, server = await make()
+    server.responses = [httpx.Response(503, json={})] * 3
+    with caplog.at_level(logging.WARNING):
+        assert await translator.translate(["x"], "EN") is None
+    assert len(server.requests) == 3
+    assert "HTTP 503" in caplog.text
+
+
+async def test_other_errors_are_not_retried(make_gemini, no_backoff):
+    translator, server = await make_gemini()
+    server.responses = [httpx.Response(429, json={})]
+    assert await translator.translate(["x"], "EN") is None
+    assert len(server.requests) == 1

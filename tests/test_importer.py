@@ -5,7 +5,7 @@ from types import MappingProxyType
 import pytest
 
 from ankibot.anki_service import AddResult, AddStatus, KnownWords, dedup_key
-from ankibot.importer import Importer, ImportItem, ItemResult, ItemStatus, parse_words
+from ankibot.importer import Importer, ImportItem, ItemResult, ItemStatus, parse_words, run_client
 from ankibot.pipeline import Lookup, Pipeline
 from ankibot.threads import DedicatedThread
 
@@ -249,3 +249,53 @@ async def test_inbox_ignores_tmp_and_results(tmp_path):
     await importer.process_inbox(tmp_path)
     assert importer.words == []
     assert sorted(p.name for p in tmp_path.iterdir()) == names
+
+
+def _fake_bot(inbox, results):
+    """A sleep() that answers the pending job on its first call, like the bot would."""
+    calls = []
+
+    def sleep(seconds):
+        calls.append(seconds)
+        if len(calls) == 1:
+            (job,) = inbox.glob("*.json")
+            assert parse_words(job.read_text(encoding="utf-8"))
+            job.unlink()
+            job.with_name(job.stem + ".result.json").write_text(json.dumps(results), encoding="utf-8")
+
+    return sleep, calls
+
+
+def test_client_prints_summary_and_exits_0(tmp_path, capsys):
+    results = {"results": [{"word": "食べる", "status": "added"}, {"word": "猫", "status": "exists"}]}
+    sleep, calls = _fake_bot(tmp_path, results)
+    assert run_client('["食べる", "猫"]', tmp_path, sleep, clock=lambda: 0.0) == 0
+    assert calls == [1]
+    assert capsys.readouterr().out == "added (1): 食べる\nexists (1): 猫\n"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_client_exits_1_on_failed_words(tmp_path, capsys):
+    words = [("食べる", "added"), ("xyz", "not_found"), ("猫", "added")]
+    sleep, _ = _fake_bot(tmp_path, {"results": [{"word": w, "status": s} for w, s in words]})
+    assert run_client('["食べる", "xyz", "猫"]', tmp_path, sleep, clock=lambda: 0.0) == 1
+    assert capsys.readouterr().out == "added (2): 食べる, 猫\nnot_found (1): xyz\n"
+
+
+def test_client_times_out_with_exit_2(tmp_path, capsys):
+    now = [0.0]
+
+    def sleep(seconds):
+        now[0] += seconds
+
+    assert run_client('["猫"]', tmp_path, sleep, clock=lambda: now[0]) == 2
+    assert now[0] == 30 * 60
+    (job,) = tmp_path.iterdir()
+    assert "bot is still working" in capsys.readouterr().out
+    assert job.read_text(encoding="utf-8") == '["猫"]'
+
+
+def test_client_rejects_bad_input_without_writing(tmp_path, capsys):
+    assert run_client('[""]', tmp_path, lambda s: None, clock=lambda: 0.0) == 1
+    assert "item 1" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []

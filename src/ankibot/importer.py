@@ -3,6 +3,9 @@ import dataclasses
 import html
 import json
 import logging
+import sys
+import time
+import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -19,6 +22,7 @@ log = logging.getLogger(__name__)
 RETRY_DELAYS = (5.0, 15.0, 30.0)
 INBOX_INTERVAL_SECONDS = 5.0
 RESULT_SUFFIX = ".result.json"
+CLIENT_TIMEOUT_SECONDS = 30 * 60
 
 _KEYS = {"word", "translation", "example", "example_translation"}
 
@@ -141,9 +145,7 @@ class Importer:
         else:
             result = {"results": [dataclasses.asdict(await self.import_word(i)) for i in items]}
         out = job.with_name(job.stem + RESULT_SUFFIX)
-        tmp = out.with_name(out.name + ".tmp")
-        tmp.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(out)
+        _write_atomic(out, json.dumps(result, ensure_ascii=False))
         # Deleted only after the result exists: a job interrupted before this reruns in full,
         # and words already saved come back as exists.
         job.unlink()
@@ -213,3 +215,50 @@ class Importer:
         except Exception as exc:
             log.warning("TTS for %r failed: %r", text, exc)
             return ""
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
+def run_client(
+    raw: str,
+    inbox: Path,
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> int:
+    """Drop a job into the bot's inbox and wait for its result; returns the exit code."""
+    try:
+        parse_words(raw)
+    except ValueError as e:
+        print(f"invalid input: {e}", file=sys.stderr)
+        return 1
+    inbox.mkdir(parents=True, exist_ok=True)
+    job_id = uuid.uuid4().hex
+    _write_atomic(inbox / f"{job_id}.json", raw)
+    result_path = inbox / f"{job_id}{RESULT_SUFFIX}"
+    deadline = clock() + CLIENT_TIMEOUT_SECONDS
+    while not result_path.exists():
+        if clock() >= deadline:
+            print(f"bot is still working on it; result file: {result_path}")
+            return 2
+        sleep(1)
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result_path.unlink()
+    if "error" in result:
+        print(f"invalid input: {result['error']}", file=sys.stderr)
+        return 1
+    groups: dict[str, list[str]] = {}
+    for r in result["results"]:
+        groups.setdefault(r["status"], []).append(r["word"])
+    for status, words in groups.items():
+        print(f"{status} ({len(words)}): {', '.join(words)}")
+    return 0 if set(groups) <= {ItemStatus.ADDED, ItemStatus.EXISTS} else 1
+
+
+if __name__ == "__main__":
+    from ankibot.config import Settings
+
+    sys.exit(run_client(sys.stdin.read(), Settings().data_dir / "inbox"))

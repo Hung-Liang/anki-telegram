@@ -95,6 +95,36 @@ make local-sync-reset   # 清空 server 資料後重新啟動（`make verify-syn
 - **Undo 會直接刪除 note**：即使該卡已同步到其他裝置並被複習過，複習紀錄也會一併消失，沒有確認步驟。
 - **full sync 的已知限制**：從桌面版做 schema 變更到 bot 偵測到 full sync 要求之間寫入的 note，會在 `bootstrap --force` 的 full download 時遺失（`--force` 會先列出這些變更）。偵測到之後 bot 暫停所有寫入。
 
+## 批次匯入
+
+手動整理的單字一次匯入，不必逐一傳給 Telegram。bot 必須在執行中：腳本把清單放進 `/data/inbox/`，由 bot 寫進它已開啟的 collection，再由腳本印出結果。
+
+```sh
+scripts/import.sh words.json
+```
+
+`words.json` 是一個陣列，每一項是單字字串或物件：
+
+```json
+[
+  "食べる",
+  {"word": "猫", "translation": "貓"},
+  {"word": "走る", "translation": ["跑", "行駛"], "example": "毎朝公園を走る。", "example_translation": "每天早上在公園跑步。"}
+]
+```
+
+| 欄位 | 有給 | 沒給 |
+| --- | --- | --- |
+| `translation`（字串或字串陣列） | 寫進 `MeaningTL`，不呼叫翻譯 API 翻釋義 | 跟 bot 一樣：有設定翻譯 API 且目標不是英文時翻譯釋義 |
+| `example` | 用它當例句 | 跟 bot 一樣，從 Tatoeba 挑 |
+| `example_translation` | 寫進 `ExampleTL`，不呼叫翻譯 API 翻例句 | 有例句且有設定翻譯 API 時翻譯 |
+
+- 整份檔案先驗證，任何一項格式錯誤（未知欄位、空字串、只給 `example_translation` 沒給 `example` 等）就整份拒絕，什麼都不寫入。
+- 輸出依狀態分組：`added`、`exists`、`not_found`、`not_single_word`、`translation_failed`、`blocked`、`error`。所有字都是 `added` 或 `exists` 時 exit code 為 0，否則為 1；超過 30 分鐘仍沒有結果時為 2（bot 沒在跑或清單太大；bot 會繼續處理，並印出結果檔路徑）。
+- **同步**：跟 Save 一樣，匯入只會重新開始 debounce 計時，時間到或傳 `/sync` 時才同步。
+- **翻譯失敗**：翻譯請求失敗會重試幾次，仍失敗就不存該字（`translation_failed`）。重跑同一份 JSON 沒有副作用：已存的字會回報為 `exists`。
+- **限制**：只接受單字（不接受句子）、不能指定讀音、沒有 dry-run。
+
 ## 可選功能
 
 - **語音（edge-tts，預設關閉）**：設定 `TTS_PROVIDER=edge` 開啟。Save 時以 `TTS_VOICE` 唸 `Reading`，檔案存在 `/data/tts/`（檔名為 `(voice, text)` 的 hash），再匯入 Anki 媒體。edge-tts 是非官方端點，失敗時卡片照常建立，`Audio` 留空並提示「語音產生失敗」。

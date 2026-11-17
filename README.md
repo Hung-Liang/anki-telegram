@@ -95,6 +95,36 @@ Notes:
 - **Undo deletes the note outright**: even if the card was already synced to other devices and reviewed, its review history goes with it, with no confirmation step.
 - **Known full sync limitation**: notes written between a schema change in desktop Anki and the bot detecting the full sync request are lost by the full download of `bootstrap --force` (`--force` lists these changes first). Once detected, the bot pauses all writes.
 
+## Bulk import
+
+Import a hand-made word list without sending each word to Telegram. The bot must be running: the script drops the list into `/data/inbox/` and the bot imports it into the collection it already has open, then the script prints the result.
+
+```sh
+scripts/import.sh words.json
+```
+
+`words.json` is an array; each item is a word string or an object:
+
+```json
+[
+  "食べる",
+  {"word": "猫", "translation": "貓"},
+  {"word": "走る", "translation": ["跑", "行駛"], "example": "毎朝公園を走る。", "example_translation": "每天早上在公園跑步。"}
+]
+```
+
+| Field | Given | Not given |
+| --- | --- | --- |
+| `translation` (string or array of strings) | Written to `MeaningTL`; senses are not sent to the translation API | Same as the bot: senses are translated when a translation API is set and the target is not English |
+| `example` | Used as the example | Same as the bot: picked from Tatoeba |
+| `example_translation` | Written to `ExampleTL`; the example is not sent to the translation API | Translated when there is an example and a translation API is set |
+
+- The whole file is validated first; any bad item (unknown key, empty string, `example_translation` without `example`, …) rejects it and nothing is written.
+- The output groups words by status: `added`, `exists`, `not_found`, `not_single_word`, `translation_failed`, `blocked`, `error`. The exit code is 0 when every word is `added` or `exists`, 1 otherwise, and 2 when there is still no result after 30 minutes (the bot is not running or the list is large; the bot keeps working and the result file path is printed).
+- **Sync**: same as Save: the import restarts the debounce timer, so the cards are synced when it expires or when you send `/sync`.
+- **Translation failures**: a failed translation request is retried a few times; if it still fails, that word is not saved (`translation_failed`). Running the same JSON again has no side effects: words already saved come back as `exists`.
+- **Limits**: single words only (no sentences), the reading cannot be chosen, and there is no dry run.
+
 ## Optional features
 
 - **Audio (edge-tts, off by default)**: set `TTS_PROVIDER=edge` to enable it. On Save, `Reading` is spoken with `TTS_VOICE`; the file is stored in `/data/tts/` (named by a hash of `(voice, text)`) and then imported into Anki media. edge-tts is an unofficial endpoint; on failure the card is still created, `Audio` is left empty and "Audio generation failed" is shown.

@@ -6,6 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from ankibot.anki_service import AddStatus
 from ankibot.pipeline import Pipeline, Translator, _join_escaped
@@ -16,6 +17,8 @@ log = logging.getLogger(__name__)
 
 # Backoff before each retry of a failed translation.
 RETRY_DELAYS = (5.0, 15.0, 30.0)
+INBOX_INTERVAL_SECONDS = 5.0
+RESULT_SUFFIX = ".result.json"
 
 _KEYS = {"word", "translation", "example", "example_translation"}
 
@@ -115,6 +118,35 @@ class Importer:
         self._tts = tts
         self._sentence_audio = sentence_audio
         self._sleep = sleep
+
+    async def inbox_loop(self, inbox: Path, interval: float = INBOX_INTERVAL_SECONDS) -> None:
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await self.process_inbox(inbox)
+            except Exception:
+                log.exception("inbox scan failed")
+
+    async def process_inbox(self, inbox: Path) -> None:
+        # Temp files end in .tmp, so the glob already skips them.
+        for job in sorted(p for p in inbox.glob("*.json") if not p.name.endswith(RESULT_SUFFIX)):
+            await self._process_job(job)
+
+    async def _process_job(self, job: Path) -> None:
+        log.info("importing %s", job.name)
+        try:
+            items = parse_words(job.read_text(encoding="utf-8"))
+        except ValueError as e:
+            result: dict = {"error": str(e)}
+        else:
+            result = {"results": [dataclasses.asdict(await self.import_word(i)) for i in items]}
+        out = job.with_name(job.stem + RESULT_SUFFIX)
+        tmp = out.with_name(out.name + ".tmp")
+        tmp.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(out)
+        # Deleted only after the result exists: a job interrupted before this reruns in full,
+        # and words already saved come back as exists.
+        job.unlink()
 
     async def import_word(self, item: ImportItem) -> ItemResult:
         try:

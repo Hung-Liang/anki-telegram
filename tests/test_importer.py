@@ -210,3 +210,42 @@ async def test_tts_failure_still_saves(make_importer):
 async def test_blocked(make_importer):
     result = await make_importer(sync=FakeSync(AddStatus.BLOCKED)).import_word(ImportItem("食べる"))
     assert result.status is ItemStatus.BLOCKED
+
+
+class StubImporter(Importer):
+    def __init__(self):
+        self.words = []
+
+    async def import_word(self, item):
+        self.words.append(item.word)
+        return ItemResult(item.word, ItemStatus.ADDED)
+
+
+async def test_inbox_job_writes_result_and_removes_job(tmp_path):
+    (tmp_path / "b.json").write_text('["猫"]', encoding="utf-8")
+    (tmp_path / "a.json").write_text('["食べる", {"word": "走る"}]', encoding="utf-8")
+    importer = StubImporter()
+    await importer.process_inbox(tmp_path)
+    assert importer.words == ["食べる", "走る", "猫"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["a.result.json", "b.result.json"]
+    result = json.loads((tmp_path / "a.result.json").read_text(encoding="utf-8"))
+    assert result == {"results": [{"word": "食べる", "status": "added"}, {"word": "走る", "status": "added"}]}
+
+
+async def test_inbox_bad_job_gets_error(tmp_path):
+    (tmp_path / "a.json").write_text('{"word": "猫"}', encoding="utf-8")
+    importer = StubImporter()
+    await importer.process_inbox(tmp_path)
+    assert importer.words == [] and not (tmp_path / "a.json").exists()
+    result = json.loads((tmp_path / "a.result.json").read_text(encoding="utf-8"))
+    assert "top level must be an array" in result["error"]
+
+
+async def test_inbox_ignores_tmp_and_results(tmp_path):
+    names = ["a.json.tmp", "b.result.json", "c.result.json.tmp"]
+    for name in names:
+        (tmp_path / name).write_text('["猫"]', encoding="utf-8")
+    importer = StubImporter()
+    await importer.process_inbox(tmp_path)
+    assert importer.words == []
+    assert sorted(p.name for p in tmp_path.iterdir()) == names

@@ -18,6 +18,7 @@ from ankibot.config import Settings
 from ankibot.examples import Examples
 from ankibot.healthcheck import Heartbeat
 from ankibot.i18n import load_texts
+from ankibot.importer import Importer
 from ankibot.pipeline import Lookup, Pipeline
 from ankibot.sync import AnkiSyncBackend, FullSyncFlag, SyncBackend, SyncManager
 from ankibot.threads import DedicatedThread
@@ -116,6 +117,10 @@ class Runtime:
         await self.sync.start()
         await self.app.updater.start_polling()
         self._background.append(asyncio.create_task(self.handlers.cleanup_loop(self.app)))
+        importer = Importer(pipeline, self.translator, self.sync, self.tts, sentence_audio)
+        inbox = s.data_dir / "inbox"
+        inbox.mkdir(exist_ok=True)
+        self._background.append(asyncio.create_task(importer.inbox_loop(inbox)))
         heartbeat = Heartbeat(s.heartbeat_file, self.app.bot.get_me)
         self._background.append(asyncio.create_task(heartbeat.run()))
         self.started.set()
